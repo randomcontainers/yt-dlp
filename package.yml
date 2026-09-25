@@ -1,0 +1,77 @@
+name: yt-dlp
+title: yt-dlp
+summary: Downloads video and audio from YouTube and many other sites.
+homepage: https://github.com/yt-dlp/yt-dlp
+# yt-dlp, the Python packages installed with it, and the libraries linked
+# statically into curl_cffi (curl, BoringSSL, zlib, zstd, libidn2 and others,
+# see licenses/). libidn2 is used under GPL-2.0-or-later.
+license: Unlicense AND MIT AND MIT-0 AND ISC AND BSD-2-Clause AND BSD-3-Clause AND Apache-2.0 AND MPL-2.0 AND GPL-2.0-or-later AND curl AND Zlib AND Unicode-DFS-2016
+upstream:
+  source: pypi
+  project: yt-dlp
+  tag-pattern: '^(\d{4}\.\d{2}\.\d{2})$'
+  version-template: '{1}'
+  versioning: calver
+  version: 2026.08.19
+  cooldown: 24h
+  publisher: yt-dlp/yt-dlp
+image:
+  entrypoint: [yt-dlp]
+  cmd: [--help]
+  env: {PYTHONUNBUFFERED: "1"}
+test:
+  - |
+    yt-dlp --version > version.txt
+    test "$(cat version.txt)" = "$VERSION"
+  - |
+    /usr/local/lib/yt-dlp/bin/python -c 'import brotli, certifi, Cryptodome, curl_cffi, mutagen, requests, urllib3, websockets, yt_dlp_ejs'
+  - |
+    # Missing handlers are listed with "(unavailable)" and the command still exits 0.
+    yt-dlp --list-impersonate-targets > impersonate.txt
+    grep -q ' curl_cffi$' impersonate.txt
+    if grep -qi unavailable impersonate.txt; then cat impersonate.txt >&2; exit 1; fi
+  - |
+    # A direct download through the generic extractor, without network access.
+    head -c 65536 /dev/urandom > sample.mp3
+    yt-dlp --enable-file-urls --no-progress -o 'download.%(ext)s' "file://$PWD/sample.mp3"
+    cmp sample.mp3 download.mp3
+  - |
+    # The cache goes to XDG_CACHE_HOME, which must be writable for any user.
+    /usr/local/lib/yt-dlp/bin/python -c 'from yt_dlp import YoutubeDL; c = YoutubeDL().cache; c.store("randomcontainers", "check", [1]); assert c.load("randomcontainers", "check") == [1]'
+examples:
+  - title: Download a video into the current directory
+    command: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" ghcr.io/randomcontainers/yt-dlp "https://www.youtube.com/watch?v=<id>"
+  - title: List the available formats
+    command: docker run --rm ghcr.io/randomcontainers/yt-dlp -F "https://www.youtube.com/watch?v=<id>"
+  - title: Extract the audio as MP3
+    command: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" ghcr.io/randomcontainers/yt-dlp -x --audio-format mp3 "https://www.youtube.com/watch?v=<id>"
+  - title: Keep the cache between runs
+    command: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -v yt-dlp-cache:/cache ghcr.io/randomcontainers/yt-dlp "https://www.youtube.com/watch?v=<id>"
+combos:
+  - with: [ffmpeg]
+    default: true
+    base: ffmpeg
+    summary: yt-dlp with FFmpeg for merging formats and post-processing, and Deno for YouTube.
+    extras:
+      alpine: {packages: [deno]}
+      ubuntu: {requirements: requirements-deno.lock}
+    extras-license: MIT
+    env: {DENO_DIR: /cache/deno}
+    test:
+      - |
+        yt-dlp -v --list-impersonate-targets > debug.txt 2>&1
+        grep -E '^\[debug\] exe versions: ffmpeg [0-9].*, ffprobe [0-9]' debug.txt
+      - |
+        # A runtime below yt-dlp's minimum is listed as "deno-<version> (unsupported)".
+        yt-dlp -v --list-impersonate-targets > debug.txt 2>&1
+        grep -E '^\[debug\] JS runtimes: (.*, )?deno-[0-9][0-9.]*(,|$)' debug.txt
+      - |
+        ffmpeg -v error -f lavfi -i sine=duration=1 tone.wav
+        yt-dlp --enable-file-urls --no-progress -x --audio-format flac -o 'audio.%(ext)s' "file://$PWD/tone.wav"
+        ffprobe -v error -show_entries stream=codec_name -of csv=p=0 audio.flac | grep -x flac
+      - |
+        # yt-dlp runs Deno with these options; Deno writes its cache to DENO_DIR.
+        printf 'console.log(6 * 7)\n' > check.js
+        PATH="/usr/local/lib/yt-dlp/bin:$PATH" deno run --ext=js --no-code-cache --no-prompt --no-remote \
+          --no-lock --node-modules-dir=none --no-config --no-npm --cached-only - < check.js > deno.txt
+        grep -x 42 deno.txt
