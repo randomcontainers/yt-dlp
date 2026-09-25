@@ -1,0 +1,6 @@
+*
+!licenses
+!requirements.lock
+!requirements-deno.lock
+!runtime-deps.*
+!scripts/metadata.py
