@@ -2,10 +2,11 @@ name: yt-dlp
 title: yt-dlp
 summary: Downloads video and audio from YouTube and many other sites.
 homepage: https://github.com/yt-dlp/yt-dlp
-# yt-dlp, the Python packages installed with it, and the libraries linked
-# statically into curl_cffi (curl, BoringSSL, zlib, zstd, libidn2 and others,
-# see licenses/). libidn2 is used under GPL-2.0-or-later.
-license: Unlicense AND MIT AND MIT-0 AND ISC AND BSD-2-Clause AND BSD-3-Clause AND Apache-2.0 AND MPL-2.0 AND GPL-2.0-or-later AND curl AND Zlib AND Unicode-DFS-2016
+# yt-dlp, the Python packages installed with it, pip and the packages it
+# vendors, and the libraries linked statically into curl_cffi (curl, BoringSSL,
+# zlib, zstd, libidn2 and others, see licenses/). libidn2 is used under
+# GPL-2.0-or-later.
+license: Unlicense AND MIT AND MIT-0 AND ISC AND BSD-2-Clause AND BSD-3-Clause AND Apache-2.0 AND MPL-2.0 AND GPL-2.0-or-later AND curl AND Zlib AND Unicode-DFS-2016 AND PSF-2.0
 upstream:
   source: pypi
   project: yt-dlp
