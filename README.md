@@ -11,8 +11,6 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" \
   ghcr.io/randomcontainers/yt-dlp "https://www.youtube.com/watch?v=<id>"
 ```
 
-The same images can also be pulled as `randomcontainers.com/yt-dlp`.
-
 Extract the audio as MP3:
 
 ```sh
