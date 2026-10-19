@@ -132,7 +132,7 @@ curl_cffi's extension module links a static build of [curl-impersonate](https://
 
 The default image also contains FFmpeg, which is built with `--enable-gpl --enable-version3` and licensed under GPL-3.0-or-later (see [randomcontainers/ffmpeg](https://github.com/randomcontainers/ffmpeg) for its source), and Deno, which is MIT licensed.
 
-The files in this repository are available under the MIT license, see [LICENSE](LICENSE).
+The files in this repository are available under the MIT license, see [LICENSE](LICENSE), except the license texts in `licenses/`, which keep their own terms.
 
 ## Requesting a tool
 
