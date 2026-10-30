@@ -13,7 +13,7 @@ upstream:
   tag-pattern: '^(\d{4}\.\d{2}\.\d{2})$'
   version-template: '{1}'
   versioning: calver
-  version: 2026.08.19
+  version: 2026.10.26
   cooldown: 24h
   publisher: yt-dlp/yt-dlp
 image:
