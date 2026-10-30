@@ -7,7 +7,8 @@ contains curl and the libraries curl uses, but they ship only curl_cffi's own
 license. This reads the curl_cffi version from requirements.lock, reads the
 curl-impersonate version it is built with from the curl_cffi source release,
 finds the library versions that curl-impersonate release uses, and writes
-their license files and the URLs and SHA-256 of their source archives to
+their license files, the notices of source files under other terms, and the
+URLs and SHA-256 of their source archives to
 licenses/curl_cffi-<version>/bundled/. Run it whenever the curl_cffi pin in
 requirements.lock changes.
 """
@@ -33,6 +34,7 @@ LIBRARIES = {
     "curl": (GITHUB, "curl/curl", "{CURL_VERSION}", ["COPYING"]),
     "boringssl": (GITHUB, "google/boringssl", "{BORINGSSL_COMMIT}", ["LICENSE"]),
     "brotli": (GITHUB, "google/brotli", "v{BROTLI_VERSION}", ["LICENSE"]),
+    "cares": (GITHUB, "c-ares/c-ares", "v{CARES_VERSION}", ["LICENSE.md"]),
     "nghttp2": (GITHUB, "nghttp2/nghttp2", "v{NGHTTP2_VERSION}", ["COPYING"]),
     "nghttp3": (GITHUB, "ngtcp2/nghttp3", "v{NGHTTP3_VERSION}", ["COPYING"]),
     "ngtcp2": (GITHUB, "ngtcp2/ngtcp2", "v{NGTCP2_VERSION}", ["COPYING"]),
@@ -44,6 +46,13 @@ LIBRARIES = {
         "v{LIBIDN2_VERSION}",
         ["COPYING", "COPYINGv2", "COPYING.LESSERv3", "COPYING.unicode"],
     ),
+}
+
+# Source files a library compiles in under other terms than its license
+# files. The copyright comment of each goes to <name>/NOTICES. Check the list
+# again when curl-impersonate moves the library to another version.
+NOTICES = {
+    "cares": ["src/lib/ares_sortaddrinfo.c", "src/lib/inet_net_pton.c", "src/lib/inet_ntop.c"],
 }
 
 
@@ -61,6 +70,24 @@ def variables(text, pattern):
     for name, value in found.items():
         found[name] = re.sub(r"\$[{(](\w+)[})]", lambda m: found.get(m.group(1), m.group(0)), value)
     return found
+
+
+def notice(text, path):
+    for comment in re.findall(r"/\*.*?\*/", text, re.S):
+        if "copyright" in comment.lower():
+            return comment
+    sys.exit(f"{path} has no copyright comment")
+
+
+def libidn2(upstream, ref, impersonate):
+    """Version, URL and SHA-256 of libidn2 from the script newer releases build it with."""
+    script = fetch(GITHUB.format(repo=upstream, ref=ref, file="scripts/build-libidn2.sh")).decode()
+    found = dict(re.findall(r'^libidn2_(version|sha256|urls)="([^"]*)"$', script, re.M))
+    if len(found) != 3:
+        sys.exit(f"curl-impersonate {impersonate}: no libidn2 version, SHA-256 and URLs in scripts/build-libidn2.sh")
+    urls = found["urls"].replace("$libidn2_version", found["version"]).split()
+    url = next((u for u in urls if u.startswith("https://ftp.gnu.org/")), urls[-1])
+    return {"LIBIDN2_VERSION": found["version"], "LIBIDN2_URL": url, "LIBIDN2_URL_HASH": f"SHA256={found['sha256']}"}
 
 
 def main():
@@ -103,13 +130,16 @@ def main():
         sys.exit(f"curl-impersonate {impersonate} builds libraries this script does not know: {unknown}")
     if "curl" not in projects:
         sys.exit(f"curl-impersonate {impersonate}: no curl project in CMakeLists.txt")
+    if "libidn2" in projects and "LIBIDN2_VERSION" not in values:
+        values.update(libidn2(upstream, ref, impersonate))
 
     archive = f"https://github.com/{upstream}/archive/refs/tags/{ref}.tar.gz"
     intro = (
         f"curl_cffi {cffi} links libcurl-impersonate statically into its extension module. "
         f"curl-impersonate {impersonate} built that library from the sources listed after it. "
         "The license files of curl-impersonate and of each library are in the directory of "
-        "the same name. libidn2, which includes its own copy of libunistring, is licensed "
+        "the same name, with the notices of source files under other terms in NOTICES. "
+        "libidn2, which includes its own copy of libunistring, is licensed "
         "under GPL-2.0-or-later or LGPL-3.0-or-later. The libidn2 archive is its source. "
         "The curl_cffi source release and the curl-impersonate archive, which has the "
         "patches and build scripts, are what you need to rebuild the extension module "
@@ -120,6 +150,7 @@ def main():
     sources += [f"curl-impersonate {impersonate}", f"  {archive}", f"  sha256:{sha256(archive)}"]
     own = GITHUB.format(repo=upstream, ref=ref, file="LICENSE")
     urls = {"curl-impersonate": {"LICENSE": own}}
+    notices = {}
     for name in sorted(projects):
         host, repo, template, files = LIBRARIES[name]
         prefix = name.upper()
@@ -132,7 +163,12 @@ def main():
         sources += [f"{name} {version}", f"  {url}", f"  sha256:{digest}"]
         lib_ref = template.format(**values)
         urls[name] = {file: host.format(repo=repo, ref=lib_ref, file=file) for file in files}
+        if name in NOTICES:
+            notices[name] = [(path, host.format(repo=repo, ref=lib_ref, file=path)) for path in NOTICES[name]]
     texts = {name: {file: fetch(url) for file, url in files.items()} for name, files in urls.items()}
+    for name, paths in notices.items():
+        parts = [f"{path}\n\n{notice(fetch(url).decode(), path)}\n" for path, url in paths]
+        texts[name]["NOTICES"] = "\n".join(parts).encode()
 
     base = ROOT / "licenses"
     for old in base.glob("curl_cffi-*"):
